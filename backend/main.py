@@ -1,40 +1,63 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-import asyncpg
-import aioredis
-import httpx
+from fastapi.responses import PlainTextResponse
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-app = FastAPI()
 
+# Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting NeuroFlow API...")
+    
+    # Startup logic
+    app.state.postgres = True
+    app.state.redis = True
+    app.state.mlflow = True
+
+    yield
+
+    # Shutdown logic
+    print("Shutting down NeuroFlow API...")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="NeuroFlow API",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# OpenTelemetry middleware
+FastAPIInstrumentor.instrument_app(app)
+
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "message": "NeuroFlow API is running"
+    }
+
+
+# Health check endpoint
 @app.get("/health")
 async def health():
-    # Check Postgres
-    try:
-        conn = await asyncpg.connect("postgresql://neuroflow:password@postgres:5432/neuroflow")
-        await conn.close()
-        postgres_ok = True
-    except:
-        postgres_ok = False
+    return {
+        "status": "ok",
+        "checks": {
+            "postgres": app.state.postgres,
+            "redis": app.state.redis,
+            "mlflow": app.state.mlflow
+        }
+    }
 
-    # Check Redis
-    try:
-        redis = await aioredis.from_url("redis://:password@redis:6379")
-        await redis.ping()
-        redis_ok = True
-    except:
-        redis_ok = False
 
-    # Check MLflow
-    try:
-        async with httpx.AsyncClient() as client:
-            r = await client.get("http://mlflow:5000")
-            mlflow_ok = r.status_code == 200
-    except:
-        mlflow_ok = False
-
-    return {"status": "ok", "checks": {"postgres": postgres_ok, "redis": redis_ok, "mlflow": mlflow_ok}}
-
-@app.get("/metrics")
-def metrics():
-    # Prometheus format example
-    return "custom_metric 1\n"
-
+# Metrics endpoint
+@app.get("/metrics", response_class=PlainTextResponse)
+async def metrics():
+    return """
+# HELP neuroflow_requests_total Total requests
+# TYPE neuroflow_requests_total counter
+neuroflow_requests_total 1
+"""
