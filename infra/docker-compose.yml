@@ -1,1 +1,56 @@
+version: "3.9"
 
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: redis
+    command: redis-server --requirepass redis123 --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    container_name: mlflow
+    depends_on:
+      - postgres
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://admin:password@postgres:5432/appdb
+      --host 0.0.0.0
+      --port 5000
+    ports:
+      - "5000:5000"
+
+  api:
+    build: ../api
+    container_name: api
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: ../worker
+    container_name: worker
+    depends_on:
+      - redis
+      - postgres
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
