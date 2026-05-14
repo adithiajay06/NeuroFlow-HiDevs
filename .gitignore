@@ -1,1 +1,23 @@
+# Environment files
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js
+node_modules/
+
+# Databases
+*.db
+
+# Vector DB / ML artifacts
+chroma/
+mlruns/
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
 
