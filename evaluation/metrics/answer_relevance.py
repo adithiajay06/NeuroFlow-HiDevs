@@ -1,17 +1,10 @@
-async def evaluate_faithfulness(query: str, answer: str, context: str, client) -> float:
-    if not context.strip() and answer.strip():
-        return 0.0
+async def evaluate_answer_relevance(query: str, answer: str, client) -> float:
+    prompt = f"Generate 3-5 questions that this answer could be a response to:\n{answer}"
+    res = await client.chat([{"role":"user","content":prompt}], {"task_type":"evaluation"})
+    questions = res.content.split("\n")
 
-    # Extract claims
-    claims_prompt = f"List all factual statements in JSON array from: {answer}"
-    claims = await client.chat([{"role":"user","content":claims_prompt}], {"task_type":"evaluation"})
-    claims_list = claims.content.split("\n")
+    q_emb = await client.embed([query], {"task_type":"embedding"})
+    gen_emb = await client.embed(questions, {"task_type":"embedding"})
 
-    supported = 0
-    for claim in claims_list:
-        check_prompt = f"Is this claim supported by the context? Claim: {claim}\nContext: {context}\nAnswer yes/no/partial"
-        res = await client.chat([{"role":"user","content":check_prompt}], {"task_type":"evaluation"})
-        if "yes" in res.content.lower(): supported += 1
-        elif "partial" in res.content.lower(): supported += 0.5
-
-    return supported / max(len(claims_list), 1)
+    sims = [cosine_similarity(q_emb, e) for e in gen_emb]
+    return sum(sims)/len(sims)
