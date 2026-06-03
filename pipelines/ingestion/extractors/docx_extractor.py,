@@ -1,0 +1,46 @@
+from docx import Document
+from . import ExtractedPage
+
+def extract_docx(file_path: str) -> list[ExtractedPage]:
+    pages: list[ExtractedPage] = []
+    doc = Document(file_path)
+
+    page_number = 1  # DOCX doesn’t have real pages, so treat sequential blocks as “pages”
+
+    for para in doc.paragraphs:
+        if para.text.strip():
+            style = para.style.name.lower()
+            metadata = {"style": style, "page_number": page_number}
+
+            # Map heading levels
+            if "heading" in style:
+                level = style.replace("heading", "h")
+                metadata["level"] = level
+
+            pages.append(
+                ExtractedPage(
+                    page_number=page_number,
+                    content=para.text.strip(),
+                    content_type="text",
+                    metadata=metadata,
+                )
+            )
+
+    # Extract tables
+    for table in doc.tables:
+        table_md = []
+        for row in table.rows:
+            table_md.append(" | ".join(cell.text.strip() for cell in row.cells))
+        md_table = "\n".join(table_md)
+
+        pages.append(
+            ExtractedPage(
+                page_number=page_number,
+                content=md_table,
+                content_type="table",
+                metadata={"page_number": page_number, "extracted_with": "python-docx"},
+            )
+        )
+        page_number += 1
+
+    return pages
